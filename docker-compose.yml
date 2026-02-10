@@ -20,6 +20,7 @@ services:
 
   app:
     build: .
+    command: ./scripts/run_pipeline.sh
     container_name: etl_app
     volumes:
       - ./data:/app/data
