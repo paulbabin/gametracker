@@ -1,29 +1,49 @@
 #!/bin/bash
-# Option 'set -e' : Arrête le script dès qu'une commande échoue 
-set -e
+# Script d'automatisation du pipeline ETL
+
+# Configuration de la base de donnees
+DB_HOST="db"
+DB_PORT="3306"
+DB_USER="root"
+DB_PASSWORD="root" # A adapter selon ton docker-compose
+DB_NAME="etl_db"
 
 echo "=================================================="
 echo "      LANCEMENT DU PIPELINE GAMETRACKER"
 echo "=================================================="
 
-# 1. Attente de la base de données 
+# Etape 1 : Attente de la BDD
 echo "[1/4] Verification de la disponibilite de la base de donnees..."
 ./scripts/wait-for-db.sh
+if [ $? -ne 0 ]; then
+    echo "Erreur : La base de donnees n'est pas accessible."
+    exit 1
+fi
+echo "Base de donnees prete!"
 
-# 2. Initialisation des tables 
+# Etape 2 : Initialisation SQL
 echo "[2/4] Initialisation du schema SQL..."
-# Utilisation des variables d'environnement du conteneur pour la connexion
 mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" --skip-ssl "$DB_NAME" < scripts/init-db.sql
+if [ $? -ne 0 ]; then
+    echo "Erreur lors de l'initialisation SQL."
+    exit 1
+fi
 
-# 3. Exécution du pipeline ETL Python 
-# Note : Cela appellera le fichier main.py (que nous allons créer à l'étape 5)
-echo "[3/4] Execution du pipeline ETL (Extract -> Transform -> Load)..."
+# Etape 3 : Execution du code Python (ETL + Rapport)
+echo "[3/4] Execution du pipeline ETL (Extract -> Transform -> Load + Rapport)..."
 python src/main.py
+if [ $? -ne 0 ]; then
+    echo "Erreur lors de l'execution du script Python."
+    exit 1
+fi
 
-# 4. Génération du rapport 
-echo "[4/4] Generation du rapport de synthese..."
-# Appel direct de la fonction generate_report via une commande Python
-python -c "from src.report import generate_report; generate_report()"
+# Etape 4 : Validation
+echo "[4/4] Verification finale..."
+if [ -f "output/rapport.txt" ]; then
+    echo "Rapport trouve : output/rapport.txt"
+else
+    echo "Attention : Le fichier rapport.txt n'a pas ete trouve."
+fi
 
 echo "=================================================="
 echo "       PIPELINE TERMINE AVEC SUCCES"

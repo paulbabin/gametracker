@@ -1,69 +1,65 @@
 import pandas as pd
 
-def transform_players(df):
+def transform_players(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Nettoie les données des joueurs :
-    1. Supprime les doublons (player_id)
-    2. Nettoie les espaces (username)
-    3. Convertit les dates (registration_date)
-    4. Valide les emails
+    Transforme et nettoie les donnees des joueurs.
     """
-    print("--- Transformation des joueurs ---")
-    
-    # 1. Supprimer les doublons sur player_id 
-    nb_avant = len(df)
-    df = df.drop_duplicates(subset=['player_id'], keep='first')
-    print(f"Doublons supprimes : {nb_avant - len(df)}")
+    df = df.copy()
 
-    # 2. Nettoyer les espaces des username (strip) 
+    # 1. Supprimer les doublons sur player_id
+    df = df.drop_duplicates(subset=['player_id'])
+
+    # 2. Nettoyer les pseudos (strip)
     df['username'] = df['username'].str.strip()
 
-    # 3. Convertir les dates d'inscription 
+    # 3. Convertir les dates d'inscription
     df['registration_date'] = pd.to_datetime(df['registration_date'], errors='coerce')
+    
+    # Remplacer NaT par None pour MySQL
+    df['registration_date'] = df['registration_date'].where(
+        df['registration_date'].notna(), None
+    )
 
-    # 4. Remplacer les emails invalides (sans @) par None 
-    # On applique une fonction lambda : si pas de '@', on met None
-    def clean_email(email):
-        if pd.isna(email) or '@' not in str(email):
-            return None
-        return email
-    
-    df['email'] = df['email'].apply(clean_email)
-    
-    print(f"Joueurs valides apres nettoyage : {len(df)}")
+    # 4. Nettoyer les emails invalides
+    df['email'] = df['email'].where(
+        df['email'].str.contains('@', na=False), None
+    )
+
+    print(f"Transforme {len(df)} joueurs")
     return df
 
-
-def transform_scores(df, valid_player_ids):
+def transform_scores(df: pd.DataFrame, valid_player_ids: list) -> pd.DataFrame:
     """
-    Nettoie les scores et vérifie la cohérence avec les joueurs :
-    1. Supprime les doublons (score_id)
-    2. Convertit les types (dates, scores)
-    3. Supprime les scores négatifs
-    4. Supprime les références orphelines (player_id inconnu)
+    Transforme et nettoie les donnees des scores.
+    Args:
+        df: DataFrame brut des scores.
+        valid_player_ids: Liste des ID de joueurs valides.
+    Returns:
+        DataFrame nettoye.
     """
-    print("--- Transformation des scores ---")
-    
-    # 1. Supprimer les doublons sur score_id 
-    nb_avant = len(df)
-    df = df.drop_duplicates(subset=['score_id'], keep='first')
-    print(f"Doublons scores supprimes : {nb_avant - len(df)}")
+    df = df.copy()
 
-    # 2. Convertir les types numériques et dates 
-    df['played_at'] = pd.to_datetime(df['played_at'], errors='coerce')
+    # 1. Supprimer les doublons sur score_id
+    df = df.drop_duplicates(subset=['score_id'])
+
+    # 2. Convertir les scores et durees en numerique
     df['score'] = pd.to_numeric(df['score'], errors='coerce')
     df['duration_minutes'] = pd.to_numeric(df['duration_minutes'], errors='coerce')
 
-    # 3. Supprimer les lignes avec un score négatif ou nul (et les NaN issus de la conversion) 
-    nb_avant_score = len(df)
+    # On force la conversion en date. 'date_invalide' deviendra NaT (Not a Time)
+    df['played_at'] = pd.to_datetime(df['played_at'], errors='coerce')
+    
+    # On remplace les NaT par None (NULL SQL)
+    df['played_at'] = df['played_at'].where(
+        df['played_at'].notna(), None
+    )
+    # -----------------------------------------------------
+
+    # 3. Filtrer les scores invalides (> 0)
     df = df[df['score'] > 0]
-    print(f"Scores invalides (<=0 ou NaN) supprimes : {nb_avant_score - len(df)}")
 
-    # 4. Supprimer les scores dont le player_id n'est pas dans valid_player_ids 
-    nb_avant_orphans = len(df)
-    # On ne garde que les lignes où le player_id est dans la liste des IDs valides
+    # 4. Filtrer les scores orphelins
     df = df[df['player_id'].isin(valid_player_ids)]
-    print(f"Scores orphelins supprimes : {nb_avant_orphans - len(df)}")
 
-    print(f"Scores valides apres nettoyage : {len(df)}")
+    print(f"Transforme {len(df)} scores")
     return df

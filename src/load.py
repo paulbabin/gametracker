@@ -1,72 +1,63 @@
 import pandas as pd
 
-def load_players(df, conn):
+def load_players(df: pd.DataFrame, conn) -> int:
     """
-    Charge les données des joueurs dans la table 'players'.
-    Gère les doublons via ON DUPLICATE KEY UPDATE.
+    Charge les joueurs dans la base de donnees.
+    Args:
+        df: DataFrame des joueurs.
+        conn: Connexion MySQL.
+    Returns:
+        Nombre de lignes inserees.
     """
-    if df.empty:
-        print("Aucun joueur a charger.")
-        return
-
-    print(f"Chargement de {len(df)} joueurs...")
     cursor = conn.cursor()
-
-    # Conversion des NaN/NaT pandas en None (NULL SQL) 
-    df = df.where(pd.notnull(df), None)
-
+    # On utilise ON DUPLICATE KEY UPDATE pour gérer les mises à jour
     query = """
-    INSERT INTO players (player_id, username, email, registration_date, country, level)
+    INSERT INTO players
+    (player_id, username, email, registration_date, country, level)
     VALUES (%s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         username = VALUES(username),
         email = VALUES(email),
         registration_date = VALUES(registration_date),
         country = VALUES(country),
-        level = VALUES(level);
+        level = VALUES(level)
     """
-
-    # Préparation des données pour l'insertion
-    data = []
+    
+    count = 0
+    # On itère ligne par ligne comme dans le cours
     for _, row in df.iterrows():
-        data.append((
-            row['player_id'],
+        values = (
+            int(row['player_id']),
             row['username'],
-            row['email'],
-            row['registration_date'],
+            # Gestion explicite des NULL pour l'email
+            row['email'] if pd.notna(row['email']) else None,
+            # Formatage de la date YYYY-MM-DD
+            row['registration_date'].strftime('%Y-%m-%d') 
+            if pd.notna(row['registration_date']) else None,
             row['country'],
-            row['level']
-        ))
+            int(row['level'])
+        )
+        cursor.execute(query, values)
+        count += 1
+    
+    # Important : on valide la transaction à la fin
+    conn.commit()
+    print(f"Charge {count} joueurs")
+    return count
 
-    try:
-        cursor.executemany(query, data)
-        conn.commit()
-        print(f"--> Succes : {cursor.rowcount} lignes affectees (players).")
-    except Exception as e:
-        print(f"Erreur lors du chargement des joueurs : {e}")
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
-
-
-def load_scores(df, conn):
+def load_scores(df: pd.DataFrame, conn) -> int:
     """
-    Charge les données des scores dans la table 'scores'.
-    Gère les doublons via ON DUPLICATE KEY UPDATE.
+    Charge les scores dans la base de donnees.
+    Args:
+        df: DataFrame des scores.
+        conn: Connexion MySQL.
+    Returns:
+        Nombre de lignes inserees.
     """
-    if df.empty:
-        print("Aucun score a charger.")
-        return
-
-    print(f"Chargement de {len(df)} scores...")
     cursor = conn.cursor()
-
-    # Conversion des NaN/NaT pandas en None (NULL SQL) 
-    df = df.where(pd.notnull(df), None)
-
     query = """
-    INSERT INTO scores (score_id, player_id, game, score, duration_minutes, played_at, platform)
+    INSERT INTO scores
+    (score_id, player_id, game, score, duration_minutes, played_at, platform)
     VALUES (%s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         player_id = VALUES(player_id),
@@ -74,28 +65,27 @@ def load_scores(df, conn):
         score = VALUES(score),
         duration_minutes = VALUES(duration_minutes),
         played_at = VALUES(played_at),
-        platform = VALUES(platform);
+        platform = VALUES(platform)
     """
-
-    data = []
+    
+    count = 0
     for _, row in df.iterrows():
-        data.append((
+        values = (
             row['score_id'],
-            row['player_id'],
+            int(row['player_id']),
             row['game'],
-            row['score'],
-            row['duration_minutes'],
-            row['played_at'],
+            # Conversion explicite en int/float pour éviter les soucis numpy
+            int(row['score']) if pd.notna(row['score']) else 0,
+            int(row['duration_minutes']) if pd.notna(row['duration_minutes']) else 0,
+            # Formatage de la date avec l'heure YYYY-MM-DD HH:MM:SS
+            row['played_at'] if pd.notna(row['played_at']) else None, 
+            # Note: Si played_at est déjà une string propre dans le CSV, on la laisse.
+            # Si c'était un objet datetime, on ferait .strftime('%Y-%m-%d %H:%M:%S')
             row['platform']
-        ))
-
-    try:
-        cursor.executemany(query, data)
-        conn.commit()
-        print(f"--> Succes : {cursor.rowcount} lignes affectees (scores).")
-    except Exception as e:
-        print(f"Erreur lors du chargement des scores : {e}")
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
+        )
+        cursor.execute(query, values)
+        count += 1
+        
+    conn.commit()
+    print(f"Charge {count} scores")
+    return count

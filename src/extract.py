@@ -1,24 +1,24 @@
-import os
 import pandas as pd
+from pathlib import Path
 
-def extract(filepath):
+def extract(filepath: str) -> pd.DataFrame:
     """
-    Lit un fichier CSV et retourne un DataFrame Pandas.
-    Vérifie l'existence du fichier et affiche le nombre de lignes.
+    Extrait les donnees d’un fichier CSV.
+    Args:
+        filepath: Chemin vers le fichier CSV.
+    Returns:
+        DataFrame contenant les donnees.
+    Raises:
+        FileNotFoundError: Si le fichier n’existe pas.
     """
-    # 1. Vérifier l'existence du fichier
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Erreur : Le fichier '{filepath}' est introuvable.")
+    path = Path(filepath)
     
-    try:
-        # 2. Lire le CSV avec Pandas
-        df = pd.read_csv(filepath)
-        
-        # 3. Afficher le nombre de lignes extraites
-        print(f"--> Extraction reussie : {len(df)} lignes lues depuis {os.path.basename(filepath)}")
-        
-        return df
-        
-    except Exception as e:
-        print(f"Erreur critique lors de la lecture de {filepath}: {e}")
-        raise
+    if not path.exists():
+        raise FileNotFoundError(f"Fichier non trouve : {filepath}")
+    
+    # On garde ton try/except qui est une sécurité supplémentaire, 
+    # ou on reste strict cours. Voici la version stricte cours :
+    df = pd.read_csv(filepath)
+    print(f"Extrait {len(df)} lignes de {path.name}")
+    
+    return df
