@@ -6,8 +6,10 @@ def transform_players(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    # 1. Supprimer les doublons sur player_id
+    # 1. Supprimer les doublons sur player_id et username (on enleve les espaces d'abord)
+    df['username'] = df['username'].str.strip()
     df = df.drop_duplicates(subset=['player_id'])
+    df = df.drop_duplicates(subset=['username'], keep='first')
 
     # 2. Nettoyer les pseudos (strip)
     df['username'] = df['username'].str.strip()
